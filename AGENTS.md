@@ -22,6 +22,8 @@ Use standard Go tooling:
 - `go run ./cmd/<app>`: run a specific CLI (once a `cmd/<app>` exists).
 - `go test ./...`: run all tests (there are no tests yet, so this will be
   a no-op until tests are added).
+- `golangci-lint run --fix`: after changing any Go files, run this to lint
+  and auto-fix.
 - `bunx -bun markdownlint-cli2 --fix "**/*.md"`: after changing any
   Markdown files, run this to lint and auto-fix.
 
