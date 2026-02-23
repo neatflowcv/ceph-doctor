@@ -2,6 +2,7 @@ package cephdoctor
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/alecthomas/kong"
@@ -36,29 +37,14 @@ func (e exitCodeError) Error() string { return "" }
 
 func (e exitCodeError) ExitCode() int { return int(e) }
 
-func writeStdout(format string, args ...any) error {
-	_, err := fmt.Fprintf(os.Stdout, format, args...)
-	if err != nil {
-		return fmt.Errorf("write stdout: %w", err)
-	}
-
-	return nil
-}
-
 func (c *clusterRegisterCmd) Run() error {
-	err := writeStdout("name=%s host=%s key=%s\n", c.Name, c.Host, c.Key)
-	if err != nil {
-		return err
-	}
+	slog.Info("cluster register", "name", c.Name, "host", c.Host, "key", c.Key)
 
 	return exitCodeError(1)
 }
 
 func (c *clusterUnregisterCmd) Run() error {
-	err := writeStdout("name=%s\n", c.Name)
-	if err != nil {
-		return err
-	}
+	slog.Info("cluster unregister", "name", c.Name)
 
 	return exitCodeError(1)
 }
@@ -74,6 +60,8 @@ func (c *clusterListCmd) Run() error {
 
 func Execute() error {
 	var command cli
+
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, nil)))
 
 	parser, err := kong.New(
 		&command,
