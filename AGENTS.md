@@ -24,7 +24,7 @@ Use standard Go tooling:
   a no-op until tests are added).
 - `golangci-lint run --fix`: after changing any Go files, run this to lint
   and auto-fix.
-- `bunx -bun markdownlint-cli2 --fix "**/*.md"`: after changing any
+- `bunx -bun markdownlint-cli2 --fix "docs/**/*.md"`: after changing any
   Markdown files, run this to lint and auto-fix.
 
 ## Coding Style & Naming Conventions
@@ -45,6 +45,7 @@ No testing framework is configured yet. When adding tests:
 - Use Go’s built-in `testing` package.
 - Name test files `*_test.go` and test functions `TestXxx`.
 - Keep tests close to the code they validate.
+- In tests, prefer `t.Context()` over `context.Background()`.
 
 ## Commit & Pull Request Guidelines
 
