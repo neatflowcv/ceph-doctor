@@ -10,9 +10,8 @@ type Cluster struct {
 }
 
 var (
-	ErrEmptyClusterName  = errors.New("cluster name is empty")
-	ErrEmptyClusterKey   = errors.New("cluster key is empty")
-	ErrEmptyClusterHosts = ErrEmptyHosts
+	ErrEmptyClusterName = errors.New("cluster name is empty")
+	ErrEmptyClusterKey  = errors.New("cluster key is empty")
 )
 
 func NewCluster(name, key string, hosts []string) (*Cluster, error) {
