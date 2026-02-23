@@ -38,7 +38,7 @@ func (e exitCodeError) Error() string { return "" }
 func (e exitCodeError) ExitCode() int { return int(e) }
 
 func (c *clusterRegisterCmd) Run() error {
-	slog.Info("cluster register", "name", c.Name, "host", c.Host, "key", c.Key)
+	slog.Info("cluster register", "name", c.Name, "host", c.Host)
 
 	return exitCodeError(1)
 }
@@ -52,7 +52,7 @@ func (c *clusterUnregisterCmd) Run() error {
 func (c *clusterListCmd) Run() error {
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"Name", "Host", "Key"})
+	t.AppendHeader(table.Row{"Name", "Host"})
 	t.Render()
 
 	return exitCodeError(1)
