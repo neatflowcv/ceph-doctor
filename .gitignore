@@ -1,0 +1,5 @@
+# OS/editor
+.vscode/
+
+# Go
+vendor/
