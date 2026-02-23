@@ -36,11 +36,7 @@ type clusterUnregisterCmd struct {
 
 type clusterListCmd struct{}
 
-type exitCodeError int
-
-func (e exitCodeError) Error() string { return "" }
-
-func (e exitCodeError) ExitCode() int { return int(e) }
+var errNoCommandProvided = errors.New("no command provided")
 
 func (c *clusterRegisterCmd) Run(repo domain.ClusterRepository) error {
 	slog.Info("cluster register", "name", c.Name, "host", c.Host)
@@ -51,10 +47,6 @@ func (c *clusterRegisterCmd) Run(repo domain.ClusterRepository) error {
 	}
 
 	err = repo.CreateCluster(context.Background(), cluster)
-	if errors.Is(err, domain.ErrClusterAlreadyExists) {
-		return exitCodeError(1)
-	}
-
 	if err != nil {
 		return fmt.Errorf("create cluster: %w", err)
 	}
@@ -66,10 +58,6 @@ func (c *clusterUnregisterCmd) Run(repo domain.ClusterRepository) error {
 	slog.Info("cluster unregister", "name", c.Name)
 
 	err := repo.DeleteCluster(context.Background(), c.Name)
-	if errors.Is(err, domain.ErrClusterNotFound) {
-		return exitCodeError(1)
-	}
-
 	if err != nil {
 		return fmt.Errorf("delete cluster: %w", err)
 	}
@@ -123,7 +111,7 @@ func Execute() error {
 		ctx, _ := kong.Trace(parser, []string{})
 		_ = ctx.PrintUsage(false)
 
-		return exitCodeError(1)
+		return errNoCommandProvided
 	}
 
 	ctx, err := parser.Parse(os.Args[1:])
@@ -137,13 +125,4 @@ func Execute() error {
 	}
 
 	return nil
-}
-
-func ExitCode(err error) (int, bool) {
-	exit, ok := err.(interface{ ExitCode() int })
-	if !ok {
-		return 0, false
-	}
-
-	return exit.ExitCode(), true
 }
