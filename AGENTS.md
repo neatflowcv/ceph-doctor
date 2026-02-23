@@ -53,6 +53,7 @@ Commit Conventions:
 - Use `<type>: 한글 설명` for commit messages.
 - Use `docs: 한글 설명` for ADR changes, and commit each ADR separately.
 - Split commits logically by change intent or scope.
+- Use `feat` for functional changes, and `chore` for tooling/config/maintenance.
 
 PRs should include a concise description, rationale, and any relevant ADR
 references in `docs/adr/`.
