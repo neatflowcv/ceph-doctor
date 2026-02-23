@@ -36,8 +36,6 @@ type clusterUnregisterCmd struct {
 
 type clusterListCmd struct{}
 
-var errNoCommandProvided = errors.New("no command provided")
-
 func (c *clusterRegisterCmd) Run(repo domain.ClusterRepository) error {
 	slog.Info("cluster register", "name", c.Name, "host", c.Host)
 
@@ -107,15 +105,13 @@ func Execute() error {
 		return fmt.Errorf("create parser: %w", err)
 	}
 
-	if len(os.Args) == 1 {
-		ctx, _ := kong.Trace(parser, []string{})
-		_ = ctx.PrintUsage(false)
-
-		return errNoCommandProvided
-	}
-
 	ctx, err := parser.Parse(os.Args[1:])
 	if err != nil {
+		var parseErr *kong.ParseError
+		if errors.As(err, &parseErr) && parseErr.Context != nil {
+			_ = parseErr.Context.PrintUsage(false)
+		}
+
 		return fmt.Errorf("parse args: %w", err)
 	}
 
