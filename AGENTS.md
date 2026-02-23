@@ -31,7 +31,6 @@ Use standard Go tooling:
 
 Follow standard Go conventions:
 
-- Format with `gofmt` (tabs for indentation, standard Go style).
 - Package names should be short, lowercase, and without underscores.
 - File names should be lowercase and use hyphens only when required by
   documentation rules (see `docs/` rule above).
