@@ -1,0 +1,282 @@
+package fscluster
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/neatflowcv/ceph-doctor/internal/domain"
+)
+
+const (
+	clusterDirName = "clusters"
+	dirPerm        = 0o700
+	filePerm       = 0o600
+)
+
+var errNilCluster = errors.New("cluster is nil")
+
+type Repository struct {
+	rootDir     string
+	clustersDir string
+}
+
+type clusterFile struct {
+	Name  string   `json:"name"`
+	Key   string   `json:"key"`
+	Hosts []string `json:"hosts"`
+}
+
+func NewRepository(rootDir string) (*Repository, error) {
+	resolvedRootDir := rootDir
+	if strings.TrimSpace(resolvedRootDir) == "" {
+		defaultDir, err := defaultRootDir()
+		if err != nil {
+			return nil, fmt.Errorf("resolve default root directory: %w", err)
+		}
+
+		resolvedRootDir = defaultDir
+	}
+
+	clustersDir := filepath.Join(resolvedRootDir, clusterDirName)
+
+	err := os.MkdirAll(clustersDir, dirPerm)
+	if err != nil {
+		return nil, fmt.Errorf("create clusters directory: %w", err)
+	}
+
+	return &Repository{
+		rootDir:     resolvedRootDir,
+		clustersDir: clustersDir,
+	}, nil
+}
+
+func (r *Repository) CreateCluster(ctx context.Context, cluster *domain.Cluster) error {
+	err := checkContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	if cluster == nil {
+		return errNilCluster
+	}
+
+	targetFilePath := r.clusterFilePath(cluster.Name())
+
+	_, statErr := os.Stat(targetFilePath)
+	if statErr == nil {
+		return domain.ErrClusterAlreadyExists
+	}
+
+	if !errors.Is(statErr, os.ErrNotExist) {
+		return fmt.Errorf("check cluster file existence: %w", statErr)
+	}
+
+	return r.writeClusterFile(targetFilePath, cluster)
+}
+
+func (r *Repository) UpdateCluster(ctx context.Context, cluster *domain.Cluster) error {
+	err := checkContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	if cluster == nil {
+		return errNilCluster
+	}
+
+	targetFilePath := r.clusterFilePath(cluster.Name())
+
+	_, statErr := os.Stat(targetFilePath)
+	if errors.Is(statErr, os.ErrNotExist) {
+		return domain.ErrClusterNotFound
+	}
+
+	if statErr != nil {
+		return fmt.Errorf("check cluster file existence: %w", statErr)
+	}
+
+	return r.writeClusterFile(targetFilePath, cluster)
+}
+
+func (r *Repository) ListClusters(ctx context.Context) ([]*domain.Cluster, error) {
+	err := checkContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	entries, err := os.ReadDir(r.clustersDir)
+	if err != nil {
+		return nil, fmt.Errorf("read clusters directory: %w", err)
+	}
+
+	clusters := make([]*domain.Cluster, 0, len(entries))
+	for _, entry := range entries {
+		err = checkContext(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+
+		cluster, err := readClusterFile(filepath.Join(r.clustersDir, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+
+		clusters = append(clusters, cluster)
+	}
+
+	sort.Slice(clusters, func(i, j int) bool {
+		return clusters[i].Name() < clusters[j].Name()
+	})
+
+	return clusters, nil
+}
+
+func (r *Repository) DeleteCluster(ctx context.Context, name string) error {
+	err := checkContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	targetFilePath := r.clusterFilePath(name)
+
+	err = os.Remove(targetFilePath)
+	if errors.Is(err, os.ErrNotExist) {
+		return domain.ErrClusterNotFound
+	} else if err != nil {
+		return fmt.Errorf("remove cluster file: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Repository) clusterFilePath(name string) string {
+	fileName := url.PathEscape(name) + ".json"
+
+	return filepath.Join(r.clustersDir, fileName)
+}
+
+func (r *Repository) writeClusterFile(path string, cluster *domain.Cluster) error {
+	record := clusterFile{
+		Name:  cluster.Name(),
+		Key:   cluster.Key(),
+		Hosts: cluster.Hosts(),
+	}
+
+	payload, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("marshal cluster file: %w", err)
+	}
+
+	err = writeFileAtomically(path, payload)
+	if err != nil {
+		return fmt.Errorf("write cluster file atomically: %w", err)
+	}
+
+	return nil
+}
+
+func readClusterFile(path string) (*domain.Cluster, error) {
+	//nolint:gosec // Path is constructed from repository-owned directory entries.
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read cluster file: %w", err)
+	}
+
+	var record clusterFile
+
+	err = json.Unmarshal(payload, &record)
+	if err != nil {
+		return nil, fmt.Errorf("decode cluster file: %w", err)
+	}
+
+	cluster, err := domain.NewCluster(record.Name, record.Key, record.Hosts)
+	if err != nil {
+		return nil, fmt.Errorf("validate cluster file: %w", err)
+	}
+
+	return cluster, nil
+}
+
+func writeFileAtomically(path string, payload []byte) error {
+	dir := filepath.Dir(path)
+
+	tmpFile, err := os.CreateTemp(dir, ".tmp-cluster-*")
+	if err != nil {
+		return fmt.Errorf("create temporary file: %w", err)
+	}
+
+	tmpFilePath := tmpFile.Name()
+
+	err = writeAndCloseTemporaryFile(tmpFile, payload)
+	if err != nil {
+		//nolint:gosec // Temporary file path is generated by os.CreateTemp in repository dir.
+		_ = os.Remove(tmpFilePath)
+
+		return err
+	}
+
+	//nolint:gosec // Destination path is fully controlled by repository path builder.
+	err = os.Rename(tmpFilePath, path)
+	if err != nil {
+		//nolint:gosec // Temporary file path is generated by os.CreateTemp in repository dir.
+		_ = os.Remove(tmpFilePath)
+
+		return fmt.Errorf("rename temporary file: %w", err)
+	}
+
+	return nil
+}
+
+func checkContext(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("context done: %w", ctx.Err())
+	default:
+		return nil
+	}
+}
+
+func writeAndCloseTemporaryFile(tmpFile *os.File, payload []byte) error {
+	err := tmpFile.Chmod(filePerm)
+	if err != nil {
+		_ = tmpFile.Close()
+
+		return fmt.Errorf("set file permission: %w", err)
+	}
+
+	_, err = tmpFile.Write(payload)
+	if err != nil {
+		_ = tmpFile.Close()
+
+		return fmt.Errorf("write temporary file: %w", err)
+	}
+
+	err = tmpFile.Sync()
+	if err != nil {
+		_ = tmpFile.Close()
+
+		return fmt.Errorf("sync temporary file: %w", err)
+	}
+
+	err = tmpFile.Close()
+	if err != nil {
+		return fmt.Errorf("close temporary file: %w", err)
+	}
+
+	return nil
+}
