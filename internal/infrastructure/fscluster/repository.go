@@ -1,3 +1,5 @@
+// Package fscluster provides a filesystem-backed cluster repository.
+// Repository-level locking is intentionally omitted for simplicity, assuming single-user usage.
 package fscluster
 
 import (
