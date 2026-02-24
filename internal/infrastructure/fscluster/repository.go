@@ -3,10 +3,12 @@
 package fscluster
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -23,6 +25,7 @@ const (
 )
 
 var errNilCluster = errors.New("cluster is nil")
+var errShortWrite = errors.New("write temporary file: short write")
 
 type Repository struct {
 	rootDir     string
@@ -261,11 +264,17 @@ func writeAndCloseTemporaryFile(tmpFile *os.File, payload []byte) error {
 		return fmt.Errorf("set file permission: %w", err)
 	}
 
-	_, err = tmpFile.Write(payload)
+	written, err := io.Copy(tmpFile, bytes.NewReader(payload))
 	if err != nil {
 		_ = tmpFile.Close()
 
 		return fmt.Errorf("write temporary file: %w", err)
+	}
+
+	if written != int64(len(payload)) {
+		_ = tmpFile.Close()
+
+		return errShortWrite
 	}
 
 	err = tmpFile.Sync()
