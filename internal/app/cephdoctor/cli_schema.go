@@ -6,6 +6,7 @@ type cli struct {
 
 type clusterCmd struct {
 	Register   clusterRegisterCmd   `kong:"cmd,help='Register a cluster.'"`
+	Status     clusterStatusCmd     `kong:"cmd,help='Show status for all registered clusters.'"`
 	Unregister clusterUnregisterCmd `kong:"cmd,help='Unregister a cluster.'"`
 	List       clusterListCmd       `kong:"cmd,help='List clusters.'"`
 }
@@ -21,3 +22,5 @@ type clusterUnregisterCmd struct {
 }
 
 type clusterListCmd struct{}
+
+type clusterStatusCmd struct{}

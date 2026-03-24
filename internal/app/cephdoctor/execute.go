@@ -8,6 +8,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/neatflowcv/ceph-doctor/internal/domain"
+	"github.com/neatflowcv/ceph-doctor/internal/infrastructure/cephpodman"
 	"github.com/neatflowcv/ceph-doctor/internal/infrastructure/fscluster"
 )
 
@@ -19,6 +20,8 @@ func Execute() error {
 		return fmt.Errorf("new repository: %w", err)
 	}
 
+	cephClient := cephpodman.NewCephClient()
+
 	var command cli
 
 	parser, err := kong.New(
@@ -26,6 +29,7 @@ func Execute() error {
 		kong.Name("cephdoctor"),
 		kong.Description("Ceph Doctor CLI"),
 		kong.BindTo(repo, (*domain.ClusterRepository)(nil)),
+		kong.BindTo(cephClient, (*domain.CephClient)(nil)),
 	)
 	if err != nil {
 		return fmt.Errorf("create parser: %w", err)
